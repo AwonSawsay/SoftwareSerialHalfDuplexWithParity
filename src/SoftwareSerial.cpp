@@ -258,13 +258,16 @@ ISR(PCINT3_vect, ISR_ALIASOF(PCINT0_vect));
 //
 // Constructor
 //
+
 SoftwareSerial::SoftwareSerial(uint8_t receivePin, uint8_t transmitPin, bool inverse_logic /* = false */, bool full_duplex /* = true */) : 
+
   _rx_delay_centering(0),
   _rx_delay_intrabit(0),
   _rx_delay_stopbit(0),
   _tx_delay(0),
   _buffer_overflow(false),
   _inverse_logic(inverse_logic)
+ 
 {
   // @micooke - passing half_duplex is fairly pointless as you can determine it from the tx and rx pin chose.
   // Im inclined to remove full_duplex as an argument.
@@ -320,12 +323,13 @@ uint16_t SoftwareSerial::subtract_cap(uint16_t num, uint16_t sub) {
 // Public methods
 //
 
-void SoftwareSerial::begin(long speed)
+void SoftwareSerial::begin(long speed,uint8_t parity)
 {
   _rx_delay_centering = _rx_delay_intrabit = _rx_delay_stopbit = _tx_delay = 0;
 
   // Precalculate the various delays, in number of 4-cycle delays
   uint16_t bit_delay = (F_CPU / speed) / 4;
+  Tparity = parity;
 
   // 12 (gcc 4.8.2) or 13 (gcc 4.3.2) cycles from start bit to first bit,
   // 15 (gcc 4.8.2) or 16 (gcc 4.3.2) cycles between bits,
@@ -362,7 +366,13 @@ void SoftwareSerial::begin(long speed)
     // delay will be at 1/4th of the stopbit. This allows some extra
     // time for ISR cleanup, which makes 115200 baud at 16Mhz work more
     // reliably
-    _rx_delay_stopbit = subtract_cap(bit_delay * 3 / 4, (37 + 11) / 4);
+    
+	if (Tparity != NONE)
+		_rx_delay_stopbit = subtract_cap(2 * bit_delay * 3 / 4, (37 + 11) / 4);
+	else
+		_rx_delay_stopbit = subtract_cap(bit_delay * 3 / 4, (37 + 11) / 4);
+	
+	
     #else // Timings counted from gcc 4.3.2 output
     // Note that this code is a _lot_ slower, mostly due to bad register
     // allocation choices of gcc. This works up to 57600 on 16Mhz and
@@ -465,20 +475,41 @@ size_t SoftwareSerial::write(uint8_t b)
     *reg &= inv_mask;
 
   tunedDelay(delay);
-
+  Cparity = 0;
   // Write each of the 8 bits
   for (uint8_t i = 8; i > 0; --i)
   {
-    if (b & 1) // choose bit
+    if (b & 1){ // choose bit
       *reg |= reg_mask; // send 1
-    else
+	  Cparity++;
+	}
+    else{
       *reg &= inv_mask; // send 0
-
+	}
     tunedDelay(delay);
     b >>= 1;
   }
 
-  // restore pin to natural state
+    if (Tparity == ODD){ //odd parity
+		if (Cparity & 1) // choose bit
+		  *reg &= inv_mask; // send 0
+		else
+		  *reg |= reg_mask; // send 1
+
+		tunedDelay(delay);
+	}
+
+    if (Tparity == EVEN){ //even parity
+		if (Cparity & 1) // choose bit
+		  *reg |= reg_mask; // send 1
+		else
+		  *reg &= inv_mask; // send 0
+
+		tunedDelay(delay);
+	}
+
+
+	// restore pin to natural state
   if (inv)
     *reg &= inv_mask;
   else

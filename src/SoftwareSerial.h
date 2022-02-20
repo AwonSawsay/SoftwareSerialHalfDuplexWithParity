@@ -61,13 +61,17 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #ifndef GCC_VERSION
 #define GCC_VERSION (__GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__)
 #endif
-
+  const uint8_t ODD = 0;
+  const uint8_t NONE = 1;
+  const uint8_t EVEN = 2;
 class SoftwareSerial : public Stream
 {
 private:
   // per object data
   uint8_t _receivePin;
   uint8_t _receiveBitMask;
+  uint8_t Tparity;
+  uint8_t Cparity;  
   volatile uint8_t *_receivePortRegister;
   uint8_t _transmitPin;								//NS Added
   uint8_t _transmitBitMask;
@@ -109,7 +113,7 @@ public:
   // public methods
   SoftwareSerial(uint8_t receivePin, uint8_t transmitPin, bool inverse_logic = false, bool full_duplex = true);
   ~SoftwareSerial();
-  void begin(long speed);
+  void begin(long speed, uint8_t parity);
   bool listen();
   void end();
   bool isListening() { return this == active_object; }
@@ -122,6 +126,7 @@ public:
   virtual int available();
   virtual void flush();
   operator bool() { return true; }
+
   
   using Print::write;
 
@@ -130,6 +135,7 @@ public:
 };
 
 // Arduino 0012 workaround
+
 #ifdef int
 #undef int
 #undef char
